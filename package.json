@@ -1,0 +1,37 @@
+{
+  "name": "discord-readonly-mcp",
+  "version": "1.0.0",
+  "description": "A tiny, dependency-free, read-only Discord MCP server: fetch any message by ID (any age), paginate channel history, and read channel/guild info. No write or admin tools.",
+  "type": "module",
+  "bin": {
+    "discord-readonly-mcp": "index.mjs"
+  },
+  "main": "index.mjs",
+  "files": [
+    "index.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "discord",
+    "claude",
+    "ai",
+    "read-only",
+    "stdio"
+  ],
+  "license": "MIT",
+  "author": "Vorakorn Kosidphokin (@Vorakorn1001)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vorakorn1001/discord-readonly-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Vorakorn1001/discord-readonly-mcp/issues"
+  },
+  "homepage": "https://github.com/Vorakorn1001/discord-readonly-mcp#readme"
+}
