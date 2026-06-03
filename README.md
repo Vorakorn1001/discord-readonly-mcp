@@ -8,6 +8,26 @@ look up channel/server info — and nothing else. It only issues `GET` requests,
 it can **never send, delete, or modify** anything. Ideal for letting an AI read a
 support/bug-report channel without granting it write access.
 
+## Quick start (npx)
+
+Published on npm — no clone or install needed. Add this to your MCP client config
+(Claude Code / Cursor `.mcp.json`, Claude Desktop `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "discord-readonly": {
+      "command": "npx",
+      "args": ["-y", "discord-readonly-mcp@latest"],
+      "env": { "DISCORD_TOKEN": "your_bot_token" }
+    }
+  }
+}
+```
+
+Restart the client, approve the server, and you're done. (See **Requirements**
+below for how to get a bot token.)
+
 ## Why this exists
 
 Most Discord MCP servers either can't fetch an old/specific **message by ID**

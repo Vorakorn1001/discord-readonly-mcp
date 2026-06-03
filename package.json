@@ -1,6 +1,6 @@
 {
   "name": "discord-readonly-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A tiny, dependency-free, read-only Discord MCP server: fetch any message by ID (any age), paginate channel history, and read channel/guild info. No write or admin tools.",
   "type": "module",
   "bin": {
