@@ -1,121 +1,133 @@
 # discord-readonly-mcp
 
-A tiny, **dependency-free, read-only** [Model Context Protocol](https://modelcontextprotocol.io) server for Discord.
+A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for
+Discord. It discovers every server visible to one or more configured bots, reads
+channels and ticket threads, resolves Discord message URLs, and returns safe image
+attachments as MCP image content.
 
-It lets an MCP client (Claude Code, Claude Desktop, Cursor, …) **read** Discord:
-fetch any message by ID (no matter how old), page through channel history, and
-look up channel/server info — and nothing else. It only issues `GET` requests, so
-it can **never send, delete, or modify** anything. Ideal for letting an AI read a
-support/bug-report channel without granting it write access.
-
-## Quick start (npx)
-
-Published on npm — no clone or install needed. Add this to your MCP client config
-(Claude Code / Cursor `.mcp.json`, Claude Desktop `claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "discord-readonly": {
-      "command": "npx",
-      "args": ["-y", "discord-readonly-mcp@latest"],
-      "env": { "DISCORD_TOKEN": "your_bot_token" }
-    }
-  }
-}
-```
-
-Restart the client, approve the server, and you're done. (See **Requirements**
-below for how to get a bot token.)
-
-## Why this exists
-
-Most Discord MCP servers either can't fetch an old/specific **message by ID**
-(they only return the newest ~100 with no cursor), or they bundle lots of
-write/admin tools you may not want pointed at a production community. This one is
-GET-only, has **zero npm dependencies**, and is a single ~200-line file.
-
-## Tools
-
-| Tool | What it does |
-|------|--------------|
-| `discord_get_message` | Fetch one message by ID — **any age**. Use for links like `…/channels/<guild>/<channel>/<message>`. |
-| `discord_read_messages` | List messages oldest-first; `limit` 1–100; `before`/`after`/`around` cursors to page through history. |
-| `discord_get_channel` | Channel/thread metadata (name, type, parent, guild). |
-| `discord_get_server_info` | A guild and the list of its channels. |
+The server only issues Discord REST `GET` requests. It does not send, edit, delete,
+react to, or moderate anything, and it stores no polling cursor or scheduler state.
 
 ## Requirements
 
-- **Node 18+** or **bun** (uses the runtime's global `fetch`; no install/build step).
-- A **Discord bot token**:
-  1. Create an app + bot at <https://discord.com/developers/applications>.
-  2. Copy the bot token (Bot → Reset Token).
-  3. Invite the bot to your server with **View Channels** + **Read Message History**
-     (OAuth2 → URL Generator → scope `bot`).
-  - *Message Content Intent is not required* — the REST API returns message content
-    to an authorized bot regardless of the gateway intent.
+- Node.js 18 or newer.
+- A Discord application with a bot. One bot can be invited to multiple servers.
+- Enable **Message Content Intent** under Developer Portal > Bot > Privileged
+  Gateway Intents. Discord applies this intent to message content, embeds, and
+  attachments returned to verified apps even though this MCP uses REST only.
+- Grant the bot **View Channel** and **Read Message History** only where it should
+  read. Add it to private threads that it needs to inspect.
 
-## Run
+For a LonglenAI setup, invite the same reader bot to `longlenai`,
+`longlenai-creator`, and `longlenai-dev`. Discord server and channel permissions
+remain the access boundary.
+
+## Install and run
 
 ```bash
-git clone https://github.com/Vorakorn1001/discord-readonly-mcp.git
-cd discord-readonly-mcp
-DISCORD_TOKEN=your_bot_token node index.mjs   # or: bun index.mjs
+npm install
+DISCORD_TOKEN=your_bot_token npm start
 ```
 
-The server talks MCP over stdio, so you normally don't run it by hand — your MCP
-client launches it. Token can also be passed as `--config <token>` instead of the
-env var.
+`DISCORD_TOKEN` is the v1-compatible single-bot configuration. For named or
+multiple bots, keep token values in environment variables and point account
+definitions at those variable names:
 
-## Use it in an MCP client
+```bash
+export DISCORD_TOKEN_LONGLENAI_READER='your_bot_token'
+export DISCORD_ACCOUNTS_JSON='[{"id":"longlenai-reader","tokenEnv":"DISCORD_TOKEN_LONGLENAI_READER","priority":100}]'
+node index.mjs
+```
 
-### Claude Code / Cursor (`.mcp.json`)
+`DISCORD_ACCOUNTS_FILE` can contain the same JSON array. Never put a token value in
+that file; `tokenEnv` is an environment variable name, not a token.
+
+## Tools
+
+| Tool | Purpose |
+| --- | --- |
+| `discord_list_servers` | List all servers visible across configured bot accounts and report account health. |
+| `discord_list_channels` | List categories, channels, active threads, and optionally archived threads for one server. |
+| `discord_list_tickets` | Find forum posts, threads, and optionally text-channel tickets with parent/category/name/time filters. |
+| `discord_read` | Read a message/channel URL or IDs, auto-select the bot with access, and inline image attachments. |
+| `discord_fetch_attachment` | Fetch one selected image from a message or a direct Discord CDN/media URL. |
+| `discord_check_access` | Diagnose which configured bot can read a guild, channel, or message. |
+
+The four v1 tools remain as compatibility aliases:
+`discord_get_message`, `discord_read_messages`, `discord_get_channel`, and
+`discord_get_server_info`.
+
+## Periodic callers
+
+Scheduling is intentionally outside this MCP. A periodic job should persist its
+own cursor and pass it back explicitly:
+
+- Use `discord_list_tickets.updatedAfter` to find recently active tickets.
+- Use `discord_read.after` with the newest message snowflake saved by the caller.
+- Save `cursors.newest` only after the caller has processed the returned messages.
+
+The MCP process keeps only disposable routing caches. Restarting it does not lose
+caller state or change the periodic contract.
+
+## Codex configuration
+
+Codex can forward a named environment variable without storing its value in TOML:
+
+```toml
+[mcp_servers.discord]
+command = "node"
+args = ["/absolute/path/to/discord-readonly-mcp/index.mjs"]
+env_vars = ["DISCORD_TOKEN_LONGLENAI_READER"]
+
+[mcp_servers.discord.env]
+DISCORD_ACCOUNTS_JSON = '[{"id":"longlenai-reader","tokenEnv":"DISCORD_TOKEN_LONGLENAI_READER","priority":100}]'
+```
+
+Launch Codex from a shell where `DISCORD_TOKEN_LONGLENAI_READER` is exported.
+
+## Claude Code configuration
+
+Project `.mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "discord": {
       "command": "node",
-      "args": ["/absolute/or/relative/path/to/discord-readonly-mcp/index.mjs"],
-      "env": { "DISCORD_TOKEN": "your_bot_token" }
+      "args": ["/absolute/path/to/discord-readonly-mcp/index.mjs"],
+      "env": {
+        "DISCORD_TOKEN_LONGLENAI_READER": "${DISCORD_TOKEN_LONGLENAI_READER}",
+        "DISCORD_ACCOUNTS_JSON": "[{\"id\":\"longlenai-reader\",\"tokenEnv\":\"DISCORD_TOKEN_LONGLENAI_READER\",\"priority\":100}]"
+      }
     }
   }
 }
 ```
 
-### Claude Desktop (`claude_desktop_config.json`)
+Restart the client after changing MCP configuration. Both Codex and Claude use the
+same stdio server and tool schemas.
 
-Same shape under `mcpServers`. Restart the client and approve the server on first use.
+## Image controls
 
-> Keep your token out of version control — put it in the client config's `env`,
-> not in code. This repo intentionally contains **no token**.
+Images are fetched only over HTTPS from Discord CDN/media hosts. Redirect targets,
+declared MIME types, file signatures, and byte limits are checked before returning
+base64 MCP image blocks.
 
-## Quick manual test
+| Environment variable | Default | Maximum |
+| --- | ---: | ---: |
+| `DISCORD_MAX_IMAGE_BYTES` | 8 MiB per image | 25 MiB |
+| `DISCORD_MAX_IMAGES` | 4 per call | 10 |
+| `DISCORD_MAX_TOTAL_IMAGE_BYTES` | 20 MiB per call | 50 MiB |
+
+## Development
 
 ```bash
-printf '%s\n' \
-  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{}}}' \
-  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
-| DISCORD_TOKEN=your_bot_token node index.mjs
+npm test
+npm pack --dry-run
 ```
 
-You should see an `initialize` result followed by the four tools.
-
-## How it works
-
-MCP's stdio transport is just **newline-delimited JSON-RPC 2.0**: the client
-launches this process and exchanges one JSON message per line over stdin/stdout.
-The server handles `initialize`, `tools/list`, and `tools/call`, mapping each tool
-to a Discord REST `GET`. All logging goes to stderr so stdout stays a clean
-protocol stream.
-
-## Security
-
-- **Read-only:** only performs `GET` requests. No message sending, deleting,
-  moderation, or server management.
-- The bot can only see servers it has been invited to, with whatever channel
-  permissions you grant it.
+Tests use mocked Discord REST responses and never need a real bot token.
 
 ## License
 
-MIT © Vorakorn Kosidphokin
+MIT (c) Vorakorn Kosidphokin
